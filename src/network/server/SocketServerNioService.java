@@ -1,9 +1,10 @@
 package network.server;
 
-import network.NetworkFactory;
-import network.ioparserworker.IoParserWorker;
-import network.server.adt.ChangeChannelRequest;
-import network.server.adt.MessageFromBuffer;
+import com.google.common.eventbus.Subscribe;
+import network.protocol.event.BytesToSocket;
+import network.server.event.BytesFromSocket;
+import network.server.model.ChangeChannelRequest;
+import util.GuavaEventBusManager;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -17,14 +18,11 @@ import java.util.*;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 
-public class SocketServerNio implements SocketServer, Runnable {
+public class SocketServerNioService implements Runnable {
 
-    // TODO Hndle variety of disconnect events
+    // TODO Handle variety of disconnect events
 
-    private static SocketServerNio instance;
-
-    // Module dependencies
-    private IoParserWorker ioParserWorker;
+    private static SocketServerNioService instance;
 
     private boolean serverStatus;
     private String serverAddress;
@@ -36,21 +34,20 @@ public class SocketServerNio implements SocketServer, Runnable {
 
     ////
 
-    private SocketServerNio() {
+    private SocketServerNioService() {
         changeChannelRequests = new ArrayBlockingQueue<>(1024);
         dataToSend = new HashMap<>();
     }
 
-    public static SocketServerNio getInstance() {
+    public static SocketServerNioService getInstance() {
         if (instance == null) {
-            instance = new SocketServerNio();
+            instance = new SocketServerNioService();
         }
         return instance;
     }
 
     ////
 
-    @Override
     public void start(String serverAddress, int serverPort) {
         serverStatus = true;
 
@@ -60,11 +57,10 @@ public class SocketServerNio implements SocketServer, Runnable {
         readBuffer = ByteBuffer.allocate(8192);
         selector = initSelector();
 
+        GuavaEventBusManager.getBus().register(this);
+
         Thread serverThread = new Thread(this);
         serverThread.start();
-
-        ioParserWorker = NetworkFactory.provideIoParserWorker();
-        ioParserWorker.start();
     }
 
     ////
@@ -81,37 +77,6 @@ public class SocketServerNio implements SocketServer, Runnable {
                 System.out.println("\nError during server main routine");
             }
         }
-    }
-
-    @Override
-    public void sendToClient(SelectionKey selectedKey, byte[] data) {
-        SocketChannel socketChannel = (SocketChannel) selectedKey.channel();
-
-        ChangeChannelRequest changeChannelRequest = new ChangeChannelRequest();
-        changeChannelRequest.setSocketChannel(socketChannel);
-        changeChannelRequest.setType(ChangeChannelRequest.SET_WRITABLE);
-        changeChannelRequest.setOps(SelectionKey.OP_WRITE);
-
-        try {
-            changeChannelRequests.put(changeChannelRequest);
-
-            synchronized (dataToSend) {
-                List<ByteBuffer> messages = dataToSend.get(socketChannel);
-
-                if (messages == null) {
-                    messages = new ArrayList<>();
-                    dataToSend.put(socketChannel, messages);
-                }
-
-                messages.add(ByteBuffer.wrap(data));
-            }
-
-            selector.wakeup();
-        } catch (InterruptedException ie) {
-            ie.printStackTrace();
-        }
-
-
     }
 
     ////
@@ -187,8 +152,12 @@ public class SocketServerNio implements SocketServer, Runnable {
             SocketChannel socketChannel = serverSocketChannel.accept();
             socketChannel.configureBlocking(false);
             socketChannel.register(selector, SelectionKey.OP_READ);
+
+            // TODO Delete test code
+            System.out.println("\nConnection accepted");
+
         } catch (IOException ioe) {
-            System.out.println("\nError during connection accrept");
+            System.out.println("\nError during connection accept");
         }
     }
 
@@ -197,13 +166,13 @@ public class SocketServerNio implements SocketServer, Runnable {
         readBuffer.clear();
 
         int readingResult = 0;
-        MessageFromBuffer messageFromBuffer = new MessageFromBuffer();
+        BytesFromSocket event = new BytesFromSocket();
 
         try {
             readingResult = socketChannel.read(readBuffer);
-            messageFromBuffer.setData(readBuffer.array());
-            messageFromBuffer.setSize(readingResult);
-            messageFromBuffer.setSelectedKey(selectedKey);
+            event.setSelectionKey(selectedKey);
+            event.setData(readBuffer.array());
+            event.setSize(readingResult);
         } catch (IOException ioe) {
             selectedKey.channel().close();
             selectedKey.cancel();
@@ -218,8 +187,7 @@ public class SocketServerNio implements SocketServer, Runnable {
             return;
         }
 
-
-        ioParserWorker.putToParseQueue(messageFromBuffer);
+        GuavaEventBusManager.getBus().post(event);
     }
 
     private void write(SelectionKey selectedKey) throws IOException {
@@ -227,6 +195,8 @@ public class SocketServerNio implements SocketServer, Runnable {
 
         synchronized (dataToSend) {
             List<ByteBuffer> messages = dataToSend.get(socketChannel);
+
+            if (messages == null) return;
 
             while (!messages.isEmpty()) {
                 ByteBuffer byteBuffer = messages.get(0);
@@ -244,4 +214,73 @@ public class SocketServerNio implements SocketServer, Runnable {
             }
         }
     }
+
+    private void sendToClient(SelectionKey selectedKey, byte[] data) {
+        SocketChannel socketChannel = (SocketChannel) selectedKey.channel();
+
+        ChangeChannelRequest changeChannelRequest = new ChangeChannelRequest();
+        changeChannelRequest.setSocketChannel(socketChannel);
+        changeChannelRequest.setType(ChangeChannelRequest.SET_WRITABLE);
+        changeChannelRequest.setOps(SelectionKey.OP_WRITE);
+
+        try {
+            changeChannelRequests.put(changeChannelRequest);
+
+            synchronized (dataToSend) {
+                List<ByteBuffer> messages = dataToSend.get(socketChannel);
+
+                if (messages == null) {
+                    messages = new ArrayList<>();
+                    dataToSend.put(socketChannel, messages);
+                }
+
+                messages.add(ByteBuffer.wrap(data));
+            }
+
+            selector.wakeup();
+        } catch (InterruptedException ie) {
+            ie.printStackTrace();
+        }
+
+
+    }
+
+    ////
+
+    @Subscribe
+    public void handleBytesToSocketEvent(BytesToSocket event) {
+        sendToClient(event.getSelectionKey(), event.getData());
+    }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,4 +1,4 @@
-package network.server.adt;
+package network.server.model;
 
 import java.nio.channels.SocketChannel;
 

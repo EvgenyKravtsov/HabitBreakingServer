@@ -1,5 +1,9 @@
-import network.NetworkFactory;
+import network.parser.JsonParserService;
+import network.protocol.JsonProtocol;
+import network.server.SocketServerNioService;
+import storage.MysqlDatabaseService;
 import util.ConfigLoader;
+import util.GuavaEventBusManager;
 
 import java.io.IOException;
 
@@ -9,7 +13,7 @@ public class Main {
 
         System.out.println("\n\n <<<< HABIT BREAKING SERVER >>>> \n\n");
 
-        ConfigLoader configLoader = null;
+        ConfigLoader configLoader;
 
         try {
             configLoader = new ConfigLoader();
@@ -21,12 +25,29 @@ public class Main {
 
         String serverAddress = ConfigLoader.serverAddress;
         int serverPort = ConfigLoader.serverPort;
-        startServer(serverAddress, serverPort);
+
+        GuavaEventBusManager.initBus();
+        startServerService(serverAddress, serverPort);
+        startParserService();
+        initProtocol();
+        startStorageService();
     }
 
     ////
 
-    private static void startServer(String serverAddress, int serverPort) {
-        NetworkFactory.provideSocketServer().start(serverAddress, serverPort);
+    private static void startServerService(String serverAddress, int serverPort) {
+        SocketServerNioService.getInstance().start(serverAddress, serverPort);
+    }
+
+    private static void startParserService() {
+        JsonParserService.getInstance().start();
+    }
+
+    private static void initProtocol() {
+        JsonProtocol.init();
+    }
+
+    private static void startStorageService() {
+        MysqlDatabaseService.getInstance().start();
     }
 }

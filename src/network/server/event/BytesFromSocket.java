@@ -1,14 +1,22 @@
-package network.server.adt;
+package network.server.event;
 
 import java.nio.channels.SelectionKey;
 
-public class MessageFromBuffer {
+public class BytesFromSocket {
 
+    private SelectionKey selectionKey;
     private byte[] data;
     private int size;
-    private SelectionKey selectedKey;
 
     ////
+
+    public SelectionKey getSelectionKey() {
+        return selectionKey;
+    }
+
+    public void setSelectionKey(SelectionKey selectionKey) {
+        this.selectionKey = selectionKey;
+    }
 
     public byte[] getData() {
         return data;
@@ -24,13 +32,5 @@ public class MessageFromBuffer {
 
     public void setSize(int size) {
         this.size = size;
-    }
-
-    public SelectionKey getSelectedKey() {
-        return selectedKey;
-    }
-
-    public void setSelectedKey(SelectionKey selectedKey) {
-        this.selectedKey = selectedKey;
     }
 }
