@@ -9,9 +9,11 @@ import java.util.Map;
 public class QueryToStorage {
 
     // Keys for data map
-    public static final String DATAKEY_EMAIL = "email";
+    public static final String DATAKEY_NAME = "name";
     public static final String DATAKEY_GENDER = "gender";
-    public static final String DATAKEY_AGE = "age";
+    public static final String DATAKEY_DATE_OF_BIRTH = "date_of_birth";
+    public static final String DATAKEY_SECRET_QUESTION = "secret_question";
+    public static final String DATAKEY_SECRET_QUESTION_ANSWER = "secret_question_answer";
     public static final String DATAKEY_REGISTRATION_DATE = "registration_date";
     public static final String DATAKEY_DATE = "date";
     public static final String DATAKEY_COUNT = "count";
